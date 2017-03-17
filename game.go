@@ -13,3 +13,8 @@ type Gamer interface {
 	WhoseTurn() []int
 	Render(player *int) string
 }
+
+// Eliminator is a game where players can be eliminated.
+type Eliminator interface {
+	Eliminated() []int
+}
