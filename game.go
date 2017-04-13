@@ -7,7 +7,7 @@ type Gamer interface {
 		player int,
 		input string,
 		playerNames []string,
-	) (logs []Log, remaining string, err error)
+	) (logs []Log, canUndo bool, remaining string, err error)
 	IsFinished() bool
 	Winners() []int
 	WhoseTurn() []int
