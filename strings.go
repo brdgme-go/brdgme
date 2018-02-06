@@ -14,7 +14,7 @@ func MatchStringInStringMap(input string, strs map[int]string) (int, error) {
 	for key, str := range strs {
 		keyMap[i] = key
 		strArr[i] = str
-		i += 1
+		i++
 	}
 	key, err := MatchStringInStrings(input, strArr)
 	return keyMap[key], err
@@ -42,7 +42,7 @@ func MatchStringInStrings(input string, strs []string) (int, error) {
 				skipped[s] = true
 				continue
 			}
-			found += 1
+			found++
 			foundStr = s
 		}
 		switch found {
