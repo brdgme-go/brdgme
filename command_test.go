@@ -251,6 +251,7 @@ func TestSpace(t *testing.T) {
 
 	output, err = parser.Parse("egg", []string{})
 	assert.Equal(t, ParseError{
+		Message:  "expected whitespace",
 		Expected: []string{"whitespace"},
 	}, *err)
 }
