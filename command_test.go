@@ -97,9 +97,7 @@ func TestToken(t *testing.T) {
 }
 
 func TestEnum(t *testing.T) {
-	parser := Enum{
-		Values: []string{"one", "onetwo", "three"},
-	}
+	parser := EnumFromStrings([]string{"one", "onetwo", "three"}, false)
 
 	output, err := parser.Parse("One blah", []string{})
 	assert.Nil(t, err)
@@ -247,6 +245,24 @@ func TestSpace(t *testing.T) {
 		Value:     "    ",
 		Consumed:  "    ",
 		Remaining: "egg",
+	}, output)
+
+	output, err = parser.Parse("egg", []string{})
+	assert.Equal(t, ParseError{
+		Message:  "expected whitespace",
+		Expected: []string{"whitespace"},
+	}, *err)
+}
+
+func TestAfterSpace(t *testing.T) {
+	parser := AfterSpace(Int{}.ToSpec())
+
+	output, err := parser.Parse("    1blah", []string{})
+	assert.Nil(t, err)
+	assert.Equal(t, Output{
+		Value:     1,
+		Consumed:  "    1",
+		Remaining: "blah",
 	}, output)
 
 	output, err = parser.Parse("egg", []string{})

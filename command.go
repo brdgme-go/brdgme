@@ -2,6 +2,7 @@ package brdgme
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -199,11 +200,34 @@ func (t Token) Expected(names []string) []string {
 }
 
 type Enum struct {
-	Values []string `json:"values"`
-	Exact  bool     `json:"exact"`
+	Values map[string]interface{} `json:"values"`
+	Exact  bool                   `json:"exact"`
 }
 
 var _ Parser = Enum{}
+
+func EnumFromStrings(values []string, exact bool) Enum {
+	m := map[string]interface{}{}
+	for _, v := range values {
+		m[v] = v
+	}
+	return Enum{
+		Values: m,
+		Exact:  exact,
+	}
+}
+
+// MarshalJSON is a custom implementation which converts the value map to a
+// slice of strings.
+func (e Enum) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Values []string
+		Exact  bool
+	}{
+		Values: e.keys(),
+		Exact:  e.Exact,
+	})
+}
 
 func (e Enum) ToSpec() Spec {
 	return Spec{
@@ -249,12 +273,13 @@ func commaListOr(items []string) string {
 
 func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 	inputLower := strings.ToLower(input)
-	matched := []string{}
+	matchedKeys := []string{}
+	var matchedVal interface{}
 	matchLen := 0
 	fullMatch := false
 
-	for _, v := range e.Values {
-		vLower := strings.ToLower(v)
+	for k, v := range e.Values {
+		vLower := strings.ToLower(k)
 		vLen := len(vLower)
 
 		matching := sharedPrefix(inputLower, vLower)
@@ -267,18 +292,19 @@ func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 				fullMatch = true
 			}
 			if matching > matchLen {
-				matched = []string{v}
+				matchedKeys = []string{k}
+				matchedVal = v
 				matchLen = matching
 			} else {
-				matched = append(matched, v)
+				matchedKeys = append(matchedKeys, k)
 			}
 		}
 	}
 
-	switch len(matched) {
+	switch len(matchedKeys) {
 	case 1:
 		return Output{
-			Value:     matched[0],
+			Value:     matchedVal,
 			Consumed:  input[:matchLen],
 			Remaining: input[matchLen:],
 		}, nil
@@ -290,15 +316,23 @@ func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 		return Output{}, &ParseError{
 			Message: fmt.Sprintf(
 				"matched %s, more input is required to uniquely match one",
-				commaListAnd(matched),
+				commaListAnd(matchedKeys),
 			),
 			Expected: e.Expected(names),
 		}
 	}
 }
 
+func (e Enum) keys() []string {
+	keys := []string{}
+	for k := range e.Values {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 func (e Enum) Expected(names []string) []string {
-	return e.Values
+	return e.keys()
 }
 
 type OneOf []Spec
@@ -552,9 +586,17 @@ type Player struct{}
 
 var _ Parser = Player{}
 
+func (p Player) nameMap(names []string) map[string]interface{} {
+	m := map[string]interface{}{}
+	for k, v := range names {
+		m[v] = k
+	}
+	return m
+}
+
 func (p Player) Parser(names []string) Enum {
 	return Enum{
-		Values: names,
+		Values: p.nameMap(names),
 	}
 }
 
@@ -569,18 +611,7 @@ func (p Player) Expected(names []string) []string {
 }
 
 func (p Player) Parse(input string, names []string) (Output, *ParseError) {
-	output, err := p.Parser(names).Parse(input, names)
-	if err != nil {
-		return output, err
-	}
-	name := output.Value.(string)
-	output.Value = 0
-	for k, n := range names {
-		if n == name {
-			output.Value = k
-		}
-	}
-	return output, err
+	return p.Parser(names).Parse(input, names)
 }
 
 type Space struct{}
@@ -618,6 +649,34 @@ func (s Space) Parse(input string, names []string) (Output, *ParseError) {
 	}, nil
 }
 
-func AfterSpace(spec Spec) Chain {
-	return Chain{Space{}.ToSpec(), spec}
+func AfterSpace(spec Spec) Map {
+	return Map{
+		Spec: Chain{Space{}.ToSpec(), spec}.ToSpec(),
+		Func: func(value interface{}) interface{} {
+			return value.([]interface{})[1]
+		},
+	}
+}
+
+type Map struct {
+	Spec Spec
+	Func func(value interface{}) interface{}
+}
+
+var _ Parser = Map{}
+
+func (m Map) ToSpec() Spec {
+	return m.ToSpec()
+}
+
+func (m Map) Expected(names []string) []string {
+	return m.Expected(names)
+}
+
+func (m Map) Parse(input string, names []string) (Output, *ParseError) {
+	o, err := m.Spec.Parse(input, names)
+	if err == nil {
+		o.Value = m.Func(o.Value)
+	}
+	return o, err
 }

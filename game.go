@@ -24,7 +24,8 @@ func (sa StatusActive) ToStatus() Status {
 }
 
 type StatusFinished struct {
-	Placings []int `json:"placings"`
+	Placings []int         `json:"placings"`
+	Stats    []interface{} `json:"stats"`
 }
 
 func (sf StatusFinished) ToStatus() Status {
