@@ -50,4 +50,5 @@ type Gamer interface {
 	PlayerCounts() []int
 	PubRender() string
 	PlayerRender(player int) string
+	Points() []float32
 }
