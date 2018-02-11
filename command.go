@@ -572,6 +572,11 @@ type Player struct{}
 
 var _ Parser = Player{}
 
+// MarshalJSON is a custom implementation to just use a string.
+func (p Player) MarshalJSON() ([]byte, error) {
+	return json.Marshal("Player")
+}
+
 func (p Player) nameMap(names []string) map[string]interface{} {
 	m := map[string]interface{}{}
 	for k, v := range names {
@@ -603,6 +608,11 @@ func (p Player) Parse(input string, names []string) (Output, *ParseError) {
 type Space struct{}
 
 var _ Parser = Space{}
+
+// MarshalJSON is a custom implementation to just use a string.
+func (s Space) MarshalJSON() ([]byte, error) {
+	return json.Marshal("Space")
+}
 
 func (s Space) ToSpec() Spec {
 	return Spec{
