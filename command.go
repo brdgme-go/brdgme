@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -37,79 +38,22 @@ func (e ParseError) Error() string {
 	}
 	if len(e.Expected) > 0 {
 		output.WriteString("expected ")
+		output.WriteString(commaListOr(e.Expected))
 	}
 	return output.String()
 }
 
 type Spec struct {
-	Int    *Int    `json:",omitempty"`
-	Token  *Token  `json:",omitempty"`
-	Enum   *Enum   `json:",omitempty"`
-	OneOf  *OneOf  `json:",omitempty"`
-	Chain  *Chain  `json:",omitempty"`
-	Many   *Many   `json:",omitempty"`
-	Opt    *Opt    `json:",omitempty"`
-	Doc    *Doc    `json:",omitempty"`
-	Player *Player `json:",omitempty"`
-	Space  *Space  `json:",omitempty"`
-}
-
-var _ Parser = Spec{}
-
-func (s Spec) ToSpec() Spec {
-	return s
-}
-
-func (s Spec) Parsers() []Parser {
-	parsers := []Parser{}
-	if s.Int != nil {
-		parsers = append(parsers, s.Int)
-	}
-	if s.Token != nil {
-		parsers = append(parsers, s.Token)
-	}
-	if s.Enum != nil {
-		parsers = append(parsers, s.Enum)
-	}
-	if s.OneOf != nil {
-		parsers = append(parsers, s.OneOf)
-	}
-	if s.Chain != nil {
-		parsers = append(parsers, s.Chain)
-	}
-	if s.Many != nil {
-		parsers = append(parsers, s.Many)
-	}
-	if s.Opt != nil {
-		parsers = append(parsers, s.Opt)
-	}
-	if s.Doc != nil {
-		parsers = append(parsers, s.Doc)
-	}
-	if s.Player != nil {
-		parsers = append(parsers, s.Player)
-	}
-	if s.Space != nil {
-		parsers = append(parsers, s.Space)
-	}
-	return parsers
-}
-
-func (s Spec) Parse(input string, names []string) (Output, *ParseError) {
-	for _, p := range s.Parsers() {
-		return p.Parse(input, names)
-	}
-	return Output{}, &ParseError{
-		Message: "there are no available parsers",
-	}
-}
-
-func (s Spec) Expected(names []string) []string {
-	expected := []string{}
-	for _, p := range s.Parsers() {
-		expected = append(expected, p.Expected(names)...)
-	}
-	return expected
+	Int    *Int       `json:",omitempty"`
+	Token  *Token     `json:",omitempty"`
+	Enum   *Enum      `json:",omitempty"`
+	OneOf  *OneOfSpec `json:",omitempty"`
+	Chain  *ChainSpec `json:",omitempty"`
+	Many   *ManySpec  `json:",omitempty"`
+	Opt    *OptSpec   `json:",omitempty"`
+	Doc    *DocSpec   `json:",omitempty"`
+	Player *Player    `json:",omitempty"`
+	Space  *Space     `json:",omitempty"`
 }
 
 type Int struct {
@@ -274,11 +218,10 @@ func commaListOr(items []string) string {
 func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 	inputLower := strings.ToLower(input)
 	matchedKeys := []string{}
-	var matchedVal interface{}
 	matchLen := 0
 	fullMatch := false
 
-	for k, v := range e.Values {
+	for k := range e.Values {
 		vLower := strings.ToLower(k)
 		vLen := len(vLower)
 
@@ -287,15 +230,14 @@ func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 			continue
 		}
 
-		if matching > 0 && matching >= matchLen && (!fullMatch || matching == vLen) {
-			if matching == vLen {
-				fullMatch = true
-			}
-			if matching > matchLen {
-				matchedKeys = []string{k}
-				matchedVal = v
+		if matching > 0 && matching >= matchLen {
+			curFullMatch := matching == vLen
+			if matching > matchLen || (!fullMatch && curFullMatch) {
+				matchedKeys = []string{}
 				matchLen = matching
-			} else {
+				fullMatch = curFullMatch
+			}
+			if matching == matchLen && (curFullMatch || !fullMatch) {
 				matchedKeys = append(matchedKeys, k)
 			}
 		}
@@ -304,7 +246,7 @@ func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 	switch len(matchedKeys) {
 	case 1:
 		return Output{
-			Value:     matchedVal,
+			Value:     e.Values[matchedKeys[0]],
 			Consumed:  input[:matchLen],
 			Remaining: input[matchLen:],
 		}, nil
@@ -313,6 +255,7 @@ func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 			Expected: e.Expected(names),
 		}
 	default:
+		sort.Strings(matchedKeys)
 		return Output{}, &ParseError{
 			Message: fmt.Sprintf(
 				"matched %s, more input is required to uniquely match one",
@@ -332,16 +275,29 @@ func (e Enum) keys() []string {
 }
 
 func (e Enum) Expected(names []string) []string {
-	return e.keys()
+	keys := e.keys()
+	sort.Strings(keys)
+	return keys
 }
 
-type OneOf []Spec
+func parsersToSpecs(parsers []Parser) []Spec {
+	specs := make([]Spec, len(parsers))
+	for k, v := range parsers {
+		specs[k] = v.ToSpec()
+	}
+	return specs
+}
+
+type OneOf []Parser
 
 var _ Parser = OneOf{}
 
+type OneOfSpec []Spec
+
 func (o OneOf) ToSpec() Spec {
+	spec := OneOfSpec(parsersToSpecs(o))
 	return Spec{
-		OneOf: &o,
+		OneOf: &spec,
 	}
 }
 
@@ -385,13 +341,16 @@ func (o OneOf) Expected(names []string) []string {
 	return expected
 }
 
-type Chain []Spec
+type Chain []Parser
 
 var _ Parser = Chain{}
 
+type ChainSpec []Spec
+
 func (c Chain) ToSpec() Spec {
+	spec := ChainSpec(parsersToSpecs(c))
 	return Spec{
-		Chain: &c,
+		Chain: &spec,
 	}
 }
 
@@ -406,9 +365,9 @@ func (c Chain) Parse(input string, names []string) (Output, *ParseError) {
 	return parseChain(input, names, c)
 }
 
-func parseChain(input string, names []string, specs []Spec) (Output, *ParseError) {
-	sLen := len(specs)
-	if sLen == 0 {
+func parseChain(input string, names []string, parsers []Parser) (Output, *ParseError) {
+	pLen := len(parsers)
+	if pLen == 0 {
 		return Output{
 			Value:     []interface{}{},
 			Consumed:  "",
@@ -416,14 +375,14 @@ func parseChain(input string, names []string, specs []Spec) (Output, *ParseError
 		}, nil
 	}
 
-	headOutput, headErr := specs[0].Parse(input, names)
+	headOutput, headErr := parsers[0].Parse(input, names)
 	outputValue := []interface{}{headOutput.Value}
 	if headErr != nil {
 		headOutput.Value = outputValue
 		return headOutput, headErr
 	}
 
-	tailOutput, tailErr := parseChain(headOutput.Remaining, names, specs[1:])
+	tailOutput, tailErr := parseChain(headOutput.Remaining, names, parsers[1:])
 	outputValue = append(outputValue, tailOutput.Value.([]interface{})...)
 
 	if tailErr != nil {
@@ -436,17 +395,29 @@ func parseChain(input string, names []string, specs []Spec) (Output, *ParseError
 }
 
 type Many struct {
+	Parser Parser
+	Min    *uint
+	Max    *uint
+	Delim  string
+}
+
+var _ Parser = Many{}
+
+type ManySpec struct {
 	Spec  Spec
 	Min   *uint
 	Max   *uint
 	Delim string
 }
 
-var _ Parser = Many{}
-
 func (m Many) ToSpec() Spec {
 	return Spec{
-		Many: &m,
+		Many: &ManySpec{
+			Spec:  m.Parser.ToSpec(),
+			Min:   m.Min,
+			Max:   m.Max,
+			Delim: m.Delim,
+		},
 	}
 }
 
@@ -466,7 +437,7 @@ func (m Many) ExpectedPrefix() string {
 func (m Many) Expected(names []string) []string {
 	expected := []string{}
 	prefix := m.ExpectedPrefix()
-	for _, e := range m.Spec.Expected(names) {
+	for _, e := range m.Parser.Expected(names) {
 		expected = append(expected, fmt.Sprintf("%s %s", prefix, e))
 	}
 	return expected
@@ -484,9 +455,9 @@ func (m Many) Parse(input string, names []string) (Output, *ParseError) {
 	first := true
 	offset := 0
 	delim := Chain{
-		Opt(Space{}.ToSpec()).ToSpec(),
-		Token(m.Delim).ToSpec(),
-		Opt(Space{}.ToSpec()).ToSpec(),
+		Opt{Space{}},
+		Token(m.Delim),
+		Opt{Space{}},
 	}
 
 	for {
@@ -501,7 +472,7 @@ func (m Many) Parse(input string, names []string) (Output, *ParseError) {
 		}
 		first = false
 
-		specOutput, specErr := m.Spec.Parse(input[innerOffset:], names)
+		specOutput, specErr := m.Parser.Parse(input[innerOffset:], names)
 		if specErr != nil {
 			break
 		}
@@ -531,26 +502,31 @@ func (m Many) Parse(input string, names []string) (Output, *ParseError) {
 	}, nil
 }
 
-type Opt Spec
+type Opt struct {
+	Parser
+}
 
-var _ Parser = Opt(Token("blah").ToSpec())
+var _ Parser = Opt{Parser: Token("blah")}
+
+type OptSpec Spec
 
 func (o Opt) ToSpec() Spec {
+	spec := OptSpec(o.Parser.ToSpec())
 	return Spec{
-		Opt: &o,
+		Opt: &spec,
 	}
 }
 
 func (o Opt) Expected(names []string) []string {
 	expected := []string{}
-	for _, e := range Spec(o).Expected(names) {
+	for _, e := range Parser(o).Expected(names) {
 		expected = append(expected, fmt.Sprintf("optional %s", e))
 	}
 	return expected
 }
 
 func (o Opt) Parse(input string, names []string) (Output, *ParseError) {
-	output, err := Spec(o).Parse(input, names)
+	output, err := o.Parser.Parse(input, names)
 	if err != nil {
 		return Output{
 			Value:     nil,
@@ -561,25 +537,35 @@ func (o Opt) Parse(input string, names []string) (Output, *ParseError) {
 }
 
 type Doc struct {
+	Name   string
+	Desc   string
+	Parser Parser
+}
+
+var _ Parser = Doc{}
+
+type DocSpec struct {
 	Name string
 	Desc string
 	Spec Spec
 }
 
-var _ Parser = Doc{}
-
 func (d Doc) ToSpec() Spec {
 	return Spec{
-		Doc: &d,
+		Doc: &DocSpec{
+			Name: d.Name,
+			Desc: d.Desc,
+			Spec: d.Parser.ToSpec(),
+		},
 	}
 }
 
 func (d Doc) Expected(names []string) []string {
-	return d.Spec.Expected(names)
+	return d.Parser.Expected(names)
 }
 
 func (d Doc) Parse(input string, names []string) (Output, *ParseError) {
-	return d.Spec.Parse(input, names)
+	return d.Parser.Parse(input, names)
 }
 
 type Player struct{}
@@ -649,9 +635,9 @@ func (s Space) Parse(input string, names []string) (Output, *ParseError) {
 	}, nil
 }
 
-func AfterSpace(spec Spec) Map {
+func AfterSpace(parser Parser) Map {
 	return Map{
-		Spec: Chain{Space{}.ToSpec(), spec}.ToSpec(),
+		Parser: Chain{Space{}, parser},
 		Func: func(value interface{}) interface{} {
 			return value.([]interface{})[1]
 		},
@@ -659,14 +645,14 @@ func AfterSpace(spec Spec) Map {
 }
 
 type Map struct {
-	Spec Spec
-	Func func(value interface{}) interface{}
+	Parser Parser
+	Func   func(value interface{}) interface{}
 }
 
 var _ Parser = Map{}
 
 func (m Map) ToSpec() Spec {
-	return m.ToSpec()
+	return m.Parser.ToSpec()
 }
 
 func (m Map) Expected(names []string) []string {
@@ -674,7 +660,7 @@ func (m Map) Expected(names []string) []string {
 }
 
 func (m Map) Parse(input string, names []string) (Output, *ParseError) {
-	o, err := m.Spec.Parse(input, names)
+	o, err := m.Parser.Parse(input, names)
 	if err == nil {
 		o.Value = m.Func(o.Value)
 	}

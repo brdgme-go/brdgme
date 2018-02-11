@@ -130,9 +130,9 @@ func TestEnum(t *testing.T) {
 
 func TestOneOf(t *testing.T) {
 	parser := OneOf{
-		Token("egg").ToSpec(),
-		Int{}.ToSpec(),
-		Token("cheese").ToSpec(),
+		Token("egg"),
+		Int{},
+		Token("cheese"),
 	}
 
 	output, err := parser.Parse("cheese blah", []string{})
@@ -151,9 +151,9 @@ func TestOneOf(t *testing.T) {
 
 func TestChain(t *testing.T) {
 	parser := Chain{
-		Token("egg").ToSpec(),
-		Int{}.ToSpec(),
-		Token("cheese").ToSpec(),
+		Token("egg"),
+		Int{},
+		Token("cheese"),
 	}
 
 	output, err := parser.Parse("egg5cheese blah", []string{})
@@ -172,7 +172,7 @@ func TestChain(t *testing.T) {
 
 func TestMany(t *testing.T) {
 	parser := Many{
-		Spec: Int{}.ToSpec(),
+		Parser: Int{},
 	}
 
 	output, err := parser.Parse("1 2 3 4 5 blah", []string{})
@@ -185,7 +185,7 @@ func TestMany(t *testing.T) {
 }
 
 func TestOpt(t *testing.T) {
-	parser := Opt(Int{}.ToSpec())
+	parser := Opt{Int{}}
 
 	output, err := parser.Parse("5 blah", []string{})
 	assert.Nil(t, err)
@@ -206,8 +206,8 @@ func TestOpt(t *testing.T) {
 
 func TestDoc(t *testing.T) {
 	parser := Doc{
-		Name: "blah",
-		Spec: Int{}.ToSpec(),
+		Name:   "blah",
+		Parser: Int{},
 	}
 
 	output, err := parser.Parse("5 blah", []string{})
@@ -255,7 +255,7 @@ func TestSpace(t *testing.T) {
 }
 
 func TestAfterSpace(t *testing.T) {
-	parser := AfterSpace(Int{}.ToSpec())
+	parser := AfterSpace(Int{})
 
 	output, err := parser.Parse("    1blah", []string{})
 	assert.Nil(t, err)
