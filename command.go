@@ -404,10 +404,10 @@ type Many struct {
 var _ Parser = Many{}
 
 type ManySpec struct {
-	Spec  Spec
-	Min   *uint
-	Max   *uint
-	Delim string
+	Spec  Spec   `json:"spec"`
+	Min   *uint  `json:"min"`
+	Max   *uint  `json:"max"`
+	Delim string `json:"delim"`
 }
 
 func (m Many) ToSpec() Spec {
@@ -545,9 +545,9 @@ type Doc struct {
 var _ Parser = Doc{}
 
 type DocSpec struct {
-	Name string
-	Desc string
-	Spec Spec
+	Name string `json:"name"`
+	Desc string `json:"desc"`
+	Spec Spec   `json:"spec"`
 }
 
 func (d Doc) ToSpec() Spec {
