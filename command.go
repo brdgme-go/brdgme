@@ -43,6 +43,8 @@ func (e ParseError) Error() string {
 	return output.String()
 }
 
+type specPlain Spec // To avoid infinite loop when marshalling
+
 type Spec struct {
 	Int    *Int       `json:",omitempty"`
 	Token  *Token     `json:",omitempty"`
@@ -54,6 +56,18 @@ type Spec struct {
 	Doc    *DocSpec   `json:",omitempty"`
 	Player *Player    `json:",omitempty"`
 	Space  *Space     `json:",omitempty"`
+}
+
+// MarshalJSON is a custom implementation to just use a string for Player and
+// Space.
+func (s Spec) MarshalJSON() ([]byte, error) {
+	if s.Player != nil {
+		return json.Marshal("Player")
+	}
+	if s.Space != nil {
+		return json.Marshal("Space")
+	}
+	return json.Marshal(specPlain(s))
 }
 
 type Int struct {
@@ -159,18 +173,6 @@ func EnumFromStrings(values []string, exact bool) Enum {
 		Values: m,
 		Exact:  exact,
 	}
-}
-
-// MarshalJSON is a custom implementation which converts the value map to a
-// slice of strings.
-func (e Enum) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Values []string
-		Exact  bool
-	}{
-		Values: e.keys(),
-		Exact:  e.Exact,
-	})
 }
 
 func (e Enum) ToSpec() Spec {
@@ -572,11 +574,6 @@ type Player struct{}
 
 var _ Parser = Player{}
 
-// MarshalJSON is a custom implementation to just use a string.
-func (p Player) MarshalJSON() ([]byte, error) {
-	return json.Marshal("Player")
-}
-
 func (p Player) nameMap(names []string) map[string]interface{} {
 	m := map[string]interface{}{}
 	for k, v := range names {
@@ -608,11 +605,6 @@ func (p Player) Parse(input string, names []string) (Output, *ParseError) {
 type Space struct{}
 
 var _ Parser = Space{}
-
-// MarshalJSON is a custom implementation to just use a string.
-func (s Space) MarshalJSON() ([]byte, error) {
-	return json.Marshal("Space")
-}
 
 func (s Space) ToSpec() Spec {
 	return Spec{
