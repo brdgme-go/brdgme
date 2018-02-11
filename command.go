@@ -71,8 +71,8 @@ func (s Spec) MarshalJSON() ([]byte, error) {
 }
 
 type Int struct {
-	Min *int `json:"min,omitempty"`
-	Max *int `json:"max,omitempty"`
+	Min *int `json:"min"`
+	Max *int `json:"max"`
 }
 
 var _ Parser = Int{}
