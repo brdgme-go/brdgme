@@ -48,7 +48,7 @@ type specPlain Spec // To avoid infinite loop when marshalling
 type Spec struct {
 	Int    *Int       `json:",omitempty"`
 	Token  *Token     `json:",omitempty"`
-	Enum   *Enum      `json:",omitempty"`
+	Enum   *EnumSpec  `json:",omitempty"`
 	OneOf  *OneOfSpec `json:",omitempty"`
 	Chain  *ChainSpec `json:",omitempty"`
 	Many   *ManySpec  `json:",omitempty"`
@@ -158,11 +158,16 @@ func (t Token) Expected(names []string) []string {
 }
 
 type Enum struct {
-	Values map[string]interface{} `json:"values"`
-	Exact  bool                   `json:"exact"`
+	Values map[string]interface{}
+	Exact  bool
 }
 
 var _ Parser = Enum{}
+
+type EnumSpec struct {
+	Values []string `json:"values"`
+	Exact  bool     `json:"exact"`
+}
 
 func EnumFromStrings(values []string, exact bool) Enum {
 	m := map[string]interface{}{}
@@ -176,8 +181,15 @@ func EnumFromStrings(values []string, exact bool) Enum {
 }
 
 func (e Enum) ToSpec() Spec {
+	values := []string{}
+	for v := range e.Values {
+		values = append(values, v)
+	}
 	return Spec{
-		Enum: &e,
+		Enum: &EnumSpec{
+			Values: values,
+			Exact:  e.Exact,
+		},
 	}
 }
 
