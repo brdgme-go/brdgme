@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -141,7 +140,8 @@ func (t Token) ToSpec() Spec {
 
 func (t Token) Parse(input string, names []string) (Output, *ParseError) {
 	tLen := len(t)
-	if strings.HasPrefix(strings.ToLower(input[:tLen]), strings.ToLower(string(t))) {
+	if len(input) >= tLen &&
+		strings.HasPrefix(strings.ToLower(input[:tLen]), strings.ToLower(string(t))) {
 		return Output{
 			Value:     t,
 			Consumed:  input[:tLen],
@@ -157,8 +157,13 @@ func (t Token) Expected(names []string) []string {
 	return []string{string(t)}
 }
 
+type EnumValue struct {
+	Name  string
+	Value interface{}
+}
+
 type Enum struct {
-	Values map[string]interface{}
+	Values []EnumValue
 	Exact  bool
 }
 
@@ -170,20 +175,23 @@ type EnumSpec struct {
 }
 
 func EnumFromStrings(values []string, exact bool) Enum {
-	m := map[string]interface{}{}
-	for _, v := range values {
-		m[v] = v
+	evs := make([]EnumValue, len(values))
+	for k, v := range values {
+		evs[k] = EnumValue{
+			Name:  v,
+			Value: v,
+		}
 	}
 	return Enum{
-		Values: m,
+		Values: evs,
 		Exact:  exact,
 	}
 }
 
 func (e Enum) ToSpec() Spec {
 	values := []string{}
-	for v := range e.Values {
-		values = append(values, v)
+	for _, v := range e.Values {
+		values = append(values, v.Name)
 	}
 	return Spec{
 		Enum: &EnumSpec{
@@ -231,12 +239,12 @@ func commaListOr(items []string) string {
 
 func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 	inputLower := strings.ToLower(input)
-	matchedKeys := []string{}
+	matchedKeys := []EnumValue{}
 	matchLen := 0
 	fullMatch := false
 
-	for k := range e.Values {
-		vLower := strings.ToLower(k)
+	for _, v := range e.Values {
+		vLower := strings.ToLower(v.Name)
 		vLen := len(vLower)
 
 		matching := sharedPrefix(inputLower, vLower)
@@ -247,12 +255,12 @@ func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 		if matching > 0 && matching >= matchLen {
 			curFullMatch := matching == vLen
 			if matching > matchLen || (!fullMatch && curFullMatch) {
-				matchedKeys = []string{}
+				matchedKeys = []EnumValue{}
 				matchLen = matching
 				fullMatch = curFullMatch
 			}
 			if matching == matchLen && (curFullMatch || !fullMatch) {
-				matchedKeys = append(matchedKeys, k)
+				matchedKeys = append(matchedKeys, v)
 			}
 		}
 	}
@@ -260,7 +268,7 @@ func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 	switch len(matchedKeys) {
 	case 1:
 		return Output{
-			Value:     e.Values[matchedKeys[0]],
+			Value:     matchedKeys[0].Value,
 			Consumed:  input[:matchLen],
 			Remaining: input[matchLen:],
 		}, nil
@@ -269,29 +277,30 @@ func (e Enum) Parse(input string, names []string) (Output, *ParseError) {
 			Expected: e.Expected(names),
 		}
 	default:
-		sort.Strings(matchedKeys)
 		return Output{}, &ParseError{
 			Message: fmt.Sprintf(
 				"matched %s, more input is required to uniquely match one",
-				commaListAnd(matchedKeys),
+				commaListAnd(enumValueNames(matchedKeys)),
 			),
 			Expected: e.Expected(names),
 		}
 	}
 }
 
-func (e Enum) keys() []string {
-	keys := []string{}
-	for k := range e.Values {
-		keys = append(keys, k)
+func enumValueNames(ev []EnumValue) []string {
+	names := []string{}
+	for _, v := range ev {
+		names = append(names, v.Name)
 	}
-	return keys
+	return names
+}
+
+func (e Enum) names() []string {
+	return enumValueNames(e.Values)
 }
 
 func (e Enum) Expected(names []string) []string {
-	keys := e.keys()
-	sort.Strings(keys)
-	return keys
+	return e.names()
 }
 
 func parsersToSpecs(parsers []Parser) []Spec {
@@ -586,17 +595,20 @@ type Player struct{}
 
 var _ Parser = Player{}
 
-func (p Player) nameMap(names []string) map[string]interface{} {
-	m := map[string]interface{}{}
+func (p Player) nameEnumValues(names []string) []EnumValue {
+	evs := make([]EnumValue, len(names))
 	for k, v := range names {
-		m[v] = k
+		evs[k] = EnumValue{
+			Name:  v,
+			Value: k,
+		}
 	}
-	return m
+	return evs
 }
 
 func (p Player) Parser(names []string) Enum {
 	return Enum{
-		Values: p.nameMap(names),
+		Values: p.nameEnumValues(names),
 	}
 }
 

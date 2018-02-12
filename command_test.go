@@ -94,6 +94,11 @@ func TestToken(t *testing.T) {
 	assert.Equal(t, ParseError{
 		Expected: []string{"play"},
 	}, *err)
+
+	output, err = parser.Parse("pl", []string{})
+	assert.Equal(t, ParseError{
+		Expected: []string{"play"},
+	}, *err)
 }
 
 func TestEnum(t *testing.T) {
