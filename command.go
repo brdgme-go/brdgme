@@ -70,8 +70,8 @@ func (s Spec) MarshalJSON() ([]byte, error) {
 }
 
 type Int struct {
-	Min *int `json:"min"`
-	Max *int `json:"max"`
+	Min *int `json:"min,omitempty"`
+	Max *int `json:"max,omitempty"`
 }
 
 var _ Parser = Int{}
@@ -428,8 +428,8 @@ var _ Parser = Many{}
 
 type ManySpec struct {
 	Spec  Spec   `json:"spec"`
-	Min   *uint  `json:"min"`
-	Max   *uint  `json:"max"`
+	Min   *uint  `json:"min,omitempty"`
+	Max   *uint  `json:"max,omitempty"`
 	Delim string `json:"delim"`
 }
 
