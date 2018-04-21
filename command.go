@@ -188,6 +188,20 @@ func EnumFromStrings(values []string, exact bool) Enum {
 	}
 }
 
+func EnumFromInts(values []int, exact bool) Enum {
+	evs := make([]EnumValue, len(values))
+	for k, v := range values {
+		evs[k] = EnumValue{
+			Name:  strconv.Itoa(v),
+			Value: v,
+		}
+	}
+	return Enum{
+		Values: evs,
+		Exact:  exact,
+	}
+}
+
 func (e Enum) ToSpec() Spec {
 	values := []string{}
 	for _, v := range e.Values {
